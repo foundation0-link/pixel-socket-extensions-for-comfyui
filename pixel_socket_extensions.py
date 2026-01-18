@@ -20,6 +20,7 @@ class PixelSocketPutObjectStorageNode(comfy_api_io.ComfyNode):
             node_id="PixelSocketPutObjectStorageNode",
             display_name="Pixel Socket Put Object Storage Node",
             category="PixelSocket",
+            is_output_node=True,
             inputs=[
                 comfy_api_io.Image.Input("image"),
                 comfy_api_io.String.Input("websocket_url",
@@ -55,9 +56,7 @@ class PixelSocketPutObjectStorageNode(comfy_api_io.ComfyNode):
                     optional=False
                 ),
             ],
-            outputs=[
-                comfy_api_io.Image.Output()
-            ]
+            outputs=[]
         )
 
     @classmethod
@@ -137,6 +136,7 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
             node_id="PixelSocketDeliveryImageNode",
             display_name="Pixel Socket Delivery Image Node",
             category="PixelSocket",
+            is_output_node=True,
             inputs=[
                 comfy_api_io.Image.Input("image"),
                 comfy_api_io.String.Input("websocket_url",
@@ -160,12 +160,12 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
                     optional=True,
                     multiline=False
                 ),
-                comfy_api_io.String.Input("positive_prompt",
+                comfy_api_io.Conditioning.Input("positive_prompt",
                     default="",
                     optional=True,
                     multiline=True
                 ),
-                comfy_api_io.String.Input("negative_prompt",
+                comfy_api_io.Conditioning.Input("negative_prompt",
                     default="",
                     optional=True,
                     multiline=True
@@ -211,8 +211,7 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
                     display_mode=comfy_api_io.NumberDisplay.number
                 ),
             ],
-            outputs=[
-            ]
+            outputs=[]
         )
 
     @classmethod
@@ -257,6 +256,8 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
         except Exception:
             import traceback
             traceback.print_exc()
+
+        return comfy_api_io.NodeOutput(image)
 
 class PixelSocketExtensions(ComfyExtension):
     async def get_node_list(self) -> list[type[comfy_api_io.ComfyNode]]:
