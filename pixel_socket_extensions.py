@@ -2,7 +2,6 @@ from typing import Any
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 import piexif
-import piexif.helper
 from comfy_api.latest import ComfyExtension, io as comfy_api_io # pyright: ignore[reportMissingImports]
 import io
 import json
@@ -128,7 +127,7 @@ class PixelSocketPutObjectStorageNode(comfy_api_io.ComfyNode):
         try:
             epoch_time:int = int(time.time() * 1000)
 
-            metadata: dict[str, str|int|float] = {
+            metadata: dict[str, Any] = {
                 "checkpoint_name": checkpoint_name,
                 "positive_prompt": positive_prompt,
                 "negative_prompt": negative_prompt,
@@ -296,7 +295,7 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
         try:
             epoch_time:int = int(time.time() * 1000)
 
-            metadata: dict[str, str|int|float] = {
+            metadata: dict[str, Any] = {
                 "checkpoint_name": checkpoint_name,
                 "positive_prompt": positive_prompt,
                 "negative_prompt": negative_prompt,
@@ -352,7 +351,7 @@ class PixelSocketExtensions(ComfyExtension):
         return [PixelSocketPutObjectStorageNode, PixelSocketDeliveryImageNode]
 
     @classmethod
-    def tensor_to_image_bytes(cls, image: torch.Tensor, file_format: str, metadata: dict[str, str|int|float]) -> bytes:
+    def tensor_to_image_bytes(cls, image: torch.Tensor, file_format: str, metadata: dict[str, Any]) -> bytes:
         arr = image.detach().cpu().numpy()
 
         # 余分な次元を削除
@@ -368,24 +367,19 @@ class PixelSocketExtensions(ComfyExtension):
 
         img = Image.fromarray(arr)
 
-        def json_default(obj):
-            if isinstance(obj, torch.Tensor):
-                return obj.item() if obj.numel() == 1 else obj.tolist()
-            return str(obj)
-
         buf = io.BytesIO()
         if file_format.lower() == "png":
             pnginfo = PngInfo()
             for key, value in metadata.items():
                 pnginfo.add_text(key, str(value))
-            pnginfo.add_text("json_format", json.dumps(metadata, ensure_ascii=False, default=json_default))
+            pnginfo.add_text("json_format", json.dumps(metadata, ensure_ascii=False))
 
             img.save(buf, format="PNG", pnginfo=pnginfo)
 
         elif file_format.lower() == "webp":
             exif_bytes = piexif.dump({
                 "Exif": {
-                    piexif.ExifIFD.UserComment: json.dumps(metadata, ensure_ascii=False, default=json_default)
+                    piexif.ExifIFD.UserComment: json.dumps(metadata)
                 },
             })
             img.save(buf, format="WEBP", optimize=True, lossless=True, exif=exif_bytes)
