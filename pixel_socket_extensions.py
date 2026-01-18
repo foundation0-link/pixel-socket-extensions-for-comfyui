@@ -59,12 +59,12 @@ class PixelSocketPutObjectStorageNode(comfy_api_io.ComfyNode):
                 comfy_api_io.Model.Input("checkpoint_name"),
                 comfy_api_io.String.Input("positive_prompt",
                     default="",
-                    multi_line=True,
+                    multiline=True,
                     optional=False
                 ),
                 comfy_api_io.String.Input("negative_prompt",
                     default="",
-                    multi_line=True,
+                    multiline=True,
                     optional=False
                 ),
                 comfy_api_io.Int.Input("seed_value",
