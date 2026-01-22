@@ -10,207 +10,8 @@ import time
 import websocket
 
 import torch # pyright: ignore[reportMissingImports]
-import boto3
 import msgpack
 import zstd
-
-class PixelSocketPutObjectStorageNode(comfy_api_io.ComfyNode):
-    @classmethod
-    def define_schema(cls) -> comfy_api_io.Schema:
-        return comfy_api_io.Schema(
-            node_id="PixelSocketPutObjectStorageNode",
-            display_name="Pixel Socket Put Object Storage Node",
-            category="PixelSocket",
-            is_output_node=True,
-            inputs=[
-                comfy_api_io.Image.Input("image"),
-                comfy_api_io.String.Input("websocket_url",
-                    default="wss://example.foundation0.link/ws/streaming",
-                    optional=False
-                ),
-                comfy_api_io.Combo.Input("file_format",
-                    options=["WEBP", "PNG"],
-                    default="WEBP"
-                ),
-                comfy_api_io.String.Input("endpoint_url",
-                    default="https://<ACCOUNT_ID>.r2.cloudflarestorage.com",
-                    optional=False
-                ),
-                comfy_api_io.String.Input("bucket_name",
-                    default="<BUCKET_NAME>",
-                    optional=False
-                ),
-                comfy_api_io.String.Input("aws_access_key_id",
-                    default="<ACCESS_KEY_ID>",
-                    optional=False
-                ),
-                comfy_api_io.String.Input("aws_secret_access_key",
-                    default="<SECRET_ACCESS_KEY>",
-                    optional=False
-                ),
-                comfy_api_io.String.Input("secret_token",
-                    default="<SECRET_TOKEN>",
-                    optional=False
-                ),
-                comfy_api_io.String.Input("request_job_id",
-                    default="<REQUEST_JOB_ID>",
-                    optional=False
-                ),
-                comfy_api_io.Model.Input("checkpoint_name"),
-                comfy_api_io.String.Input("positive_prompt",
-                    default="",
-                    multiline=True,
-                    optional=False
-                ),
-                comfy_api_io.String.Input("negative_prompt",
-                    default="",
-                    multiline=True,
-                    optional=False
-                ),
-                comfy_api_io.Int.Input("seed_value",
-                    default=0,
-                    min=0,
-                    max=0xffffffffffffffff,
-                    step=1,
-                    optional=False,
-                    display_mode=comfy_api_io.NumberDisplay.number
-                ),
-                comfy_api_io.Int.Input("width",
-                    default=512,
-                    min=1,
-                    max=8192,
-                    step=8,
-                    optional=False,
-                    display_mode=comfy_api_io.NumberDisplay.number
-                ),
-                comfy_api_io.Int.Input("height",
-                    default=512,
-                    min=1,
-                    max=8192,
-                    step=8,
-                    optional=False,
-                    display_mode=comfy_api_io.NumberDisplay.number
-                ),
-                comfy_api_io.Int.Input("step",
-                    default=20,
-                    min=1,
-                    max=100,
-                    step=1,
-                    optional=False,
-                    display_mode=comfy_api_io.NumberDisplay.number
-                ),
-                comfy_api_io.Float.Input("cfg",
-                    default=8.0,
-                    min=0.0,
-                    max=100.0,
-                    step=0.1,
-                    optional=False,
-                    display_mode=comfy_api_io.NumberDisplay.number
-                ),
-            ],
-            outputs=[]
-        )
-
-    @classmethod
-    def execute(cls,
-                image: torch.Tensor,
-                file_format: str,
-                websocket_url: str,
-                endpoint_url: str,
-                bucket_name: str,
-                aws_access_key_id: str,
-                aws_secret_access_key: str,
-                secret_token: str,
-                request_job_id: str,
-                checkpoint_name: str,
-                positive_prompt,
-                negative_prompt,
-                seed_value: int,
-                width: int,
-                height: int,
-                step: int,
-                cfg: float,
-                **kwargs
-                ) -> comfy_api_io.NodeOutput:
-        try:
-            epoch_time:int = int(time.time() * 1000)
-
-            metadata: dict[str, Any] = {
-                "checkpoint_name": checkpoint_name,
-                "positive_prompt": positive_prompt,
-                "negative_prompt": negative_prompt,
-                "seed_value": seed_value,
-                "width": width,
-                "height": height,
-                "step": step,
-                "cfg": cfg,
-            }
-
-            img_bytes = PixelSocketExtensions.tensor_to_image_bytes(image, file_format, metadata)
-            img_size = len(img_bytes)
-
-            s3_client = boto3.client(
-                service_name="s3",
-                endpoint_url=endpoint_url,
-                # Retrieve your S3 API credentials for your R2 bucket via API tokens (see: https://developers.cloudflare.com/r2/api/tokens)
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
-                region_name="auto", # Required by SDK but not used by R2
-            )
-
-            file_key = f"comfyui_{request_job_id}.{epoch_time}.{file_format.lower()}"
-
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key=file_key,
-                ContentType=f"image/{file_format.lower()}",
-                Body=img_bytes
-            )
-            del img_bytes
-
-            object_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': bucket_name, 'Key': file_key},
-                ExpiresIn=3600 * 24 * 7  # 7 days
-            )
-
-            # Create payload
-            payload: dict[str, Any] = {
-                "type": "notification-from-pixel-socket",
-                "payload": {
-                    "jobId": request_job_id,
-                    "blobData": None,  # Not sending image data here
-                    "imageLength": img_size,
-                    "fileExtension": file_format.lower(),
-                    "mimeType": f"image/{file_format.lower()}",
-                    "objectUrl": object_url,
-                    "secretToken": secret_token,
-                    "timestamp": epoch_time,
-                    "promptParams": metadata
-                }
-            }
-            packed: bytes = msgpack.packb(payload, use_bin_type=True)
-            compressed_data: bytes = zstd.compress(packed, 22) # High compression level:22
-
-            ws: websocket.WebSocket | None = None
-            try:
-                ws = websocket.create_connection(websocket_url)
-                ws.send(compressed_data, opcode=websocket.ABNF.OPCODE_BINARY)
-            except Exception as ex:
-                print(f"WebSocket error: {ex}")
-            finally:
-                if ws is not None:
-                    try:
-                        ws.close()
-                    except Exception:
-                        pass
-                ws = None
-
-        except Exception:
-            import traceback
-            traceback.print_exc()
-
-        return comfy_api_io.NodeOutput(image)
 
 class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
     @classmethod
@@ -238,7 +39,10 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
                     default="<REQUEST_JOB_ID>",
                     optional=False
                 ),
-                comfy_api_io.Model.Input("checkpoint_name"),
+                comfy_api_io.Model.Input("checkpoint_name",
+                    default="",
+                    optional=True
+                ),
                 comfy_api_io.String.Input("positive_prompt",
                     default="",
                     multiline=True,
@@ -366,7 +170,7 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
 
 class PixelSocketExtensions(ComfyExtension):
     async def get_node_list(self) -> list[type[comfy_api_io.ComfyNode]]:
-        return [PixelSocketPutObjectStorageNode, PixelSocketDeliveryImageNode]
+        return [PixelSocketDeliveryImageNode]
 
     @classmethod
     def tensor_to_image_bytes(cls, image: torch.Tensor, file_format: str, metadata: dict[str, Any]) -> bytes:
