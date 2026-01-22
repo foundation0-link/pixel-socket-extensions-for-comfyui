@@ -39,10 +39,7 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
                     default="<REQUEST_JOB_ID>",
                     optional=False
                 ),
-                comfy_api_io.Model.Input("checkpoint_name",
-                    default="",
-                    optional=True
-                ),
+                comfy_api_io.Model.Input("checkpoint_name"),
                 comfy_api_io.String.Input("positive_prompt",
                     default="",
                     multiline=True,
