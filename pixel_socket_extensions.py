@@ -8,7 +8,6 @@ import json
 import numpy as np
 import time
 import websocket
-import pyoxipng
 
 import torch # pyright: ignore[reportMissingImports]
 import msgpack
@@ -196,16 +195,9 @@ class PixelSocketExtensions(ComfyExtension):
 
             img.save(buf, format="PNG", pnginfo=pnginfo)
 
-            # PyOxipngで最適化
-            buf.seek(0)
-            optimized_data = pyoxipng.optimize(buf.getvalue())
-            buf = io.BytesIO(optimized_data)
-
         elif file_format.lower() == "webp":
             exif_bytes = piexif.dump({
                 "Exif": {
-                    piexif.ImageIFD.ImageWidth: metadata.get("width", img.width),
-                    piexif.ImageIFD.ImageLength: metadata.get("height", img.height),
                     piexif.ExifIFD.UserComment: b"ASCII\x00\x00\x00" + json.dumps(metadata, ensure_ascii=True).encode('utf-8')
                 },
             })
