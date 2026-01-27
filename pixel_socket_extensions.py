@@ -198,7 +198,7 @@ class PixelSocketExtensions(ComfyExtension):
 
             # Optimize PNG using oxipng
             buf.seek(0)
-            buf = io.BytesIO(oxipng.optimize_from_memory(buf.getvalue()))
+            buf = io.BytesIO(oxipng.optimize_from_memory(buf.getvalue(), level=4))
 
         elif file_format.lower() == "webp":
             exif_bytes = piexif.dump({
