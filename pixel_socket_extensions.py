@@ -187,7 +187,7 @@ class PixelSocketLoadImageFromBase64Node(comfy_api_io.ComfyNode):
             is_output_node=True,
             inputs=[
                 comfy_api_io.String.Input("image_base64",
-                    default="<IMAGE_BASE64>",
+                    default="",
                     multiline=True,
                     optional=False
                 ),
@@ -215,7 +215,12 @@ class PixelSocketLoadImageFromBase64Node(comfy_api_io.ComfyNode):
             min_dimension = 64
             multiple_of = 8
 
+            original_size = img.size
             width, height = img.size
+
+            # Validate current dimensions - catch any invalid sizes
+            if width < 2 or height < 2:
+                raise ValueError(f"Invalid image dimensions: {width}x{height}")
 
             # Ensure minimum dimensions
             if width < min_dimension or height < min_dimension:
@@ -224,22 +229,25 @@ class PixelSocketLoadImageFromBase64Node(comfy_api_io.ComfyNode):
                 new_height = int(height * scale_factor)
                 img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
                 width, height = img.size
-                print(f"Upscaled image from original size to {width}x{height}")
+                print(f"[VAE] Upscaled image from {original_size} to {width}x{height}")
 
             # Round dimensions to nearest multiple of 8
-            width = (width // multiple_of) * multiple_of
-            height = (height // multiple_of) * multiple_of
+            width = ((width + 7) // multiple_of) * multiple_of  # Round up to nearest multiple
+            height = ((height + 7) // multiple_of) * multiple_of
 
+            # Final safety check
             if width < min_dimension or height < min_dimension:
                 width = max(width, min_dimension)
                 height = max(height, min_dimension)
-                width = (width // multiple_of) * multiple_of
-                height = (height // multiple_of) * multiple_of
+                width = ((width + 7) // multiple_of) * multiple_of
+                height = ((height + 7) // multiple_of) * multiple_of
 
             # Resize if needed
             if img.size != (width, height):
                 img = img.resize((width, height), Image.Resampling.LANCZOS)
-                print(f"Adjusted image dimensions to {width}x{height} (VAE compatible)")
+                print(f"[VAE] Adjusted image dimensions from {original_size} to {width}x{height} (multiple of {multiple_of})")
+            else:
+                print(f"[VAE] Image dimensions {width}x{height} compatible with VAE")
 
             # Convert to tensor
             img_array = np.array(img).astype(np.float32) / 255.0
