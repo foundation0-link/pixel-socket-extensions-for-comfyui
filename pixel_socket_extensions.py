@@ -194,14 +194,14 @@ class PixelSocketLoadImageFromUrlNode(comfy_api_io.ComfyNode):
                 ),
                 comfy_api_io.Int.Input("width",
                     default=1024,
-                    min=1,
+                    min=0,
                     step=8,
                     optional=False,
                     display_mode=comfy_api_io.NumberDisplay.number
                 ),
                 comfy_api_io.Int.Input("height",
                     default=1024,
-                    min=1,
+                    min=0,
                     step=8,
                     optional=False,
                     display_mode=comfy_api_io.NumberDisplay.number
