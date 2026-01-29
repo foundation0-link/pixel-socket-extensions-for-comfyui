@@ -205,52 +205,68 @@ class PixelSocketLoadImageFromBase64Node(comfy_api_io.ComfyNode):
                 **kwargs) -> None:
 
         try:
-            # Decode base64 string
-            image_data = base64.b64decode(image_base64)
+            # Decode base64 string with validation
+            if not image_base64 or not isinstance(image_base64, str):
+                raise ValueError(f"Invalid base64 input: {type(image_base64)}")
+
+            try:
+                image_data = base64.b64decode(image_base64, validate=True)
+            except Exception as e:
+                raise ValueError(f"Failed to decode base64: {e}")
+
+            if len(image_data) == 0:
+                raise ValueError("Decoded base64 data is empty")
 
             # Load image using PIL
-            img = Image.open(io.BytesIO(image_data)).convert("RGB")  # Use RGB instead of RGBA
+            try:
+                img = Image.open(io.BytesIO(image_data)).convert("RGB")
+            except Exception as e:
+                raise ValueError(f"Failed to load image from base64 data: {e}")
 
             # Validate and adjust image dimensions for VAE compatibility
-            min_dimension = 64
-            multiple_of = 8
+            MIN_DIMENSION = 64
+            MULTIPLE_OF = 8
 
             original_size = img.size
             width, height = img.size
 
+            print(f"[PixelSocketLoadImageFromBase64Node] Original image size: {width}x{height}")
+
             # Validate current dimensions - catch any invalid sizes
-            if width < 2 or height < 2:
-                raise ValueError(f"Invalid image dimensions: {width}x{height}")
+            if width < 4 or height < 4:
+                raise ValueError(f"Image dimensions too small for VAE processing: {width}x{height}. Minimum 4x4 required.")
 
             # Ensure minimum dimensions
-            if width < min_dimension or height < min_dimension:
-                scale_factor = max(min_dimension / width, min_dimension / height)
-                new_width = int(width * scale_factor)
-                new_height = int(height * scale_factor)
+            if width < MIN_DIMENSION or height < MIN_DIMENSION:
+                scale_factor = max(MIN_DIMENSION / width, MIN_DIMENSION / height)
+                new_width = max(MIN_DIMENSION, int(width * scale_factor))
+                new_height = max(MIN_DIMENSION, int(height * scale_factor))
                 img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
                 width, height = img.size
-                print(f"[VAE] Upscaled image from {original_size} to {width}x{height}")
+                print(f"[PixelSocketLoadImageFromBase64Node] Upscaled image from {original_size} to {width}x{height}")
 
             # Round dimensions to nearest multiple of 8
-            width = ((width + 7) // multiple_of) * multiple_of  # Round up to nearest multiple
-            height = ((height + 7) // multiple_of) * multiple_of
+            width = ((width + MULTIPLE_OF - 1) // MULTIPLE_OF) * MULTIPLE_OF
+            height = ((height + MULTIPLE_OF - 1) // MULTIPLE_OF) * MULTIPLE_OF
 
-            # Final safety check
-            if width < min_dimension or height < min_dimension:
-                width = max(width, min_dimension)
-                height = max(height, min_dimension)
-                width = ((width + 7) // multiple_of) * multiple_of
-                height = ((height + 7) // multiple_of) * multiple_of
+            # Final safety check - ensure minimum after rounding
+            width = max(width, MIN_DIMENSION)
+            height = max(height, MIN_DIMENSION)
 
             # Resize if needed
             if img.size != (width, height):
                 img = img.resize((width, height), Image.Resampling.LANCZOS)
-                print(f"[VAE] Adjusted image dimensions from {original_size} to {width}x{height} (multiple of {multiple_of})")
+                print(f"[PixelSocketLoadImageFromBase64Node] Adjusted image dimensions from {original_size} to {width}x{height} (multiple of {MULTIPLE_OF})")
             else:
-                print(f"[VAE] Image dimensions {width}x{height} compatible with VAE")
+                print(f"[PixelSocketLoadImageFromBase64Node] Image dimensions {width}x{height} compatible with VAE")
+
+            # Verify final image size
+            if width < MIN_DIMENSION or height < MIN_DIMENSION:
+                raise ValueError(f"Failed to ensure minimum dimensions: {width}x{height}")
 
             # Convert to tensor
             img_array = np.array(img).astype(np.float32) / 255.0
+            print(f"[PixelSocketLoadImageFromBase64Node] Tensor array shape before transpose: {img_array.shape}")
 
             # img_array shape is (H, W, C) from PIL
             # Convert to (1, C, H, W) format for ComfyUI
@@ -259,12 +275,12 @@ class PixelSocketLoadImageFromBase64Node(comfy_api_io.ComfyNode):
             else:
                 img_tensor = torch.from_numpy(img_array).unsqueeze(0).unsqueeze(0)
 
-            original_width = img.width if img else width
-            original_height = img.height if img else height
+            print(f"[PixelSocketLoadImageFromBase64Node] Final tensor shape: {img_tensor.shape}")
 
-            return comfy_api_io.NodeOutput(img_tensor, original_width, original_height)
+            return comfy_api_io.NodeOutput(img_tensor, width, height)
 
-        except Exception:
+        except Exception as e:
+            print(f"[PixelSocketLoadImageFromBase64Node] ERROR: {e}")
             import traceback
             traceback.print_exc()
 
