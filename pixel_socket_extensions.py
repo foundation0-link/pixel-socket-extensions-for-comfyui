@@ -28,8 +28,8 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
             inputs=[
                 comfy_api_io.Image.Input("image"),
                 comfy_api_io.Combo.Input("file_format",
-                    options=["WEBP", "PNG"],
-                    default="WEBP"
+                    options=["PNG", "WEBP"],
+                    default="PNG"
                 ),
                 comfy_api_io.String.Input("websocket_url",
                     default="wss://example.foundation0.link/ws/streaming",
@@ -113,8 +113,8 @@ class PixelSocketDeliveryImageNode(comfy_api_io.ComfyNode):
                 secret_token: str,
                 request_job_id: str,
                 checkpoint_name: str,
-                positive_prompt,
-                negative_prompt,
+                positive_prompt: str,
+                negative_prompt: str,
                 seed_value: int,
                 width: int,
                 height: int,
@@ -191,31 +191,15 @@ class PixelSocketLoadImageFromUrlNode(comfy_api_io.ComfyNode):
                     default="",
                     multiline=False,
                     optional=False
-                ),
-                comfy_api_io.Int.Input("width",
-                    default=1024,
-                    min=0,
-                    step=8,
-                    optional=False,
-                    display_mode=comfy_api_io.NumberDisplay.number
-                ),
-                comfy_api_io.Int.Input("height",
-                    default=1024,
-                    min=0,
-                    step=8,
-                    optional=False,
-                    display_mode=comfy_api_io.NumberDisplay.number
-                ),
+                )
             ],
             outputs=[
                 comfy_api_io.Image.Output("image"),
-                comfy_api_io.Int.Output("width"),
-                comfy_api_io.Int.Output("height"),
             ]
         )
 
     @classmethod
-    def execute(cls, image_url: str, width: int, height: int, **kwargs) -> None:
+    def execute(cls, image_url: str, **kwargs) -> None:
         try:
             img_data: bytes = b""
             if image_url.startswith("data:image/"):
@@ -236,26 +220,10 @@ class PixelSocketLoadImageFromUrlNode(comfy_api_io.ComfyNode):
 
             img = Image.open(io.BytesIO(img_data)).convert("RGBA")
 
-            # アスペクト比を維持しながらwidth/height以内の最大サイズにリサイズ
-            original_width, original_height = img.size
-            aspect_ratio = original_width / original_height
-
-            if width / height > aspect_ratio:
-                # 高さに合わせる
-                new_height = height
-                new_width = int(height * aspect_ratio)
-            else:
-                # 幅に合わせる
-                new_width = width
-                new_height = int(width / aspect_ratio)
-
-            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            width_output, height_output = img.size
-
             img_array = np.array(img).astype(np.float32) / 255.0
             img_tensor = torch.from_numpy(img_array).unsqueeze(0)
 
-            return comfy_api_io.NodeOutput(img_tensor, width_output, height_output)
+            return comfy_api_io.NodeOutput(img_tensor)
 
         except Exception as ex:
             print(f"[PixelSocketLoadImageFromUrlNode] ERROR: {ex}")
@@ -306,12 +274,96 @@ class PixelSocketLoadImageFromUrlNode(comfy_api_io.ComfyNode):
             print(f"[PixelSocketLoadImageFromUrlNode] WARNING: Image verification failed: {e}")
             return False
 
+class PixelSocketResizeImage(comfy_api_io.ComfyNode):
+    @classmethod
+    def define_schema(cls) -> comfy_api_io.Schema:
+        return comfy_api_io.Schema(
+            node_id="PixelSocketResizeImage",
+            display_name="Resize Image Node",
+            category="PixelSocket",
+            is_output_node=True,
+            inputs=[
+                comfy_api_io.Image.Input("image"),
+                comfy_api_io.Int.Input("width",
+                    default=1024,
+                    min=0,
+                    step=8,
+                    optional=False,
+                    display_mode=comfy_api_io.NumberDisplay.number
+                ),
+                comfy_api_io.Int.Input("height",
+                    default=1024,
+                    min=0,
+                    step=8,
+                    optional=False,
+                    display_mode=comfy_api_io.NumberDisplay.number
+                ),
+            ],
+            outputs=[
+                comfy_api_io.Image.Output("image"),
+                comfy_api_io.Int.Output("width"),
+                comfy_api_io.Int.Output("height"),
+            ]
+        )
+
+    @classmethod
+    def execute(cls, image: torch.Tensor, width: int, height: int, **kwargs) -> None:
+        try:
+            img = PixelSocketExtensions.tensor_to_image(image)
+            img = img.convert("RGBA")
+
+            # アスペクト比を維持しながらwidth/height以内の最大サイズにリサイズ
+            original_width, original_height = img.size
+            aspect_ratio = original_width / original_height
+
+            if width / height > aspect_ratio:
+                # 高さに合わせる
+                new_height = height
+                new_width = int(height * aspect_ratio)
+            else:
+                # 幅に合わせる
+                new_width = width
+                new_height = int(width / aspect_ratio)
+
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            width_output, height_output = img.size
+
+            img_array = np.array(img).astype(np.float32) / 255.0
+            img_tensor = torch.from_numpy(img_array).unsqueeze(0)
+
+            return comfy_api_io.NodeOutput(img_tensor, width_output, height_output)
+
+        except Exception as ex:
+            print(f"[PixelSocketResizeImage] ERROR: {ex}")
+            import traceback
+            traceback.print_exc()
+
+        return PixelSocketExtensions.create_fallback_image(width, height)
+
 class PixelSocketExtensions(ComfyExtension):
     async def get_node_list(self) -> list[type[comfy_api_io.ComfyNode]]:
         return [
                     PixelSocketDeliveryImageNode,
                     PixelSocketLoadImageFromUrlNode
                ]
+
+    @classmethod
+    def tensor_to_image(cls, image: torch.Tensor) -> Image.Image:
+        arr = image.detach().cpu().numpy()
+
+        # 余分な次元を削除
+        while arr.ndim > 3:
+            arr = arr[0]
+
+        arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
+
+        if arr.shape[-1] == 1:
+            arr = arr[:, :, 0]
+        elif arr.shape[-1] not in (3, 4):
+            raise ValueError(f"Unsupported channel count: {arr.shape}")
+
+        img = Image.fromarray(arr)
+        return img
 
     @classmethod
     def tensor_to_image_bytes(cls, image: torch.Tensor, file_format: str, oxipng_level: int, metadata: dict[str, Any]) -> bytes:
@@ -357,12 +409,12 @@ class PixelSocketExtensions(ComfyExtension):
         return buf.getvalue()
 
     @classmethod
-    def create_fallback_image(cls) -> comfy_api_io.NodeOutput:
-        """1024x1024の空白イメージを生成"""
-        blank_img = Image.new("RGBA", (1024, 1024), color=(255, 255, 255, 255))
+    def create_fallback_image(cls, width: int = 1024, height: int = 1024) -> comfy_api_io.NodeOutput:
+        """空白イメージを生成"""
+        blank_img = Image.new("RGBA", (width, height), color=(255, 255, 255, 255))
         img_array = np.array(blank_img).astype(np.float32) / 255.0
         img_tensor = torch.from_numpy(img_array).unsqueeze(0)
-        return comfy_api_io.NodeOutput(img_tensor, 1024, 1024)
+        return comfy_api_io.NodeOutput(img_tensor, width, height)
 
 async def comfy_entrypoint() -> ComfyExtension:
     return PixelSocketExtensions()
