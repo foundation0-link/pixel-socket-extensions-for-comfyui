@@ -4,7 +4,7 @@ from PIL import Image
 from comfy_api.latest import io as comfy_api_io # pyright: ignore[reportMissingImports]
 import torch # pyright: ignore[reportMissingImports]
 
-from .pixel_socket_units import PixelSocketUnits
+from .pixel_socket_utils import PixelSocketUtils
 
 class PixelSocketResizeImageNode(comfy_api_io.ComfyNode):
     @classmethod
@@ -41,7 +41,7 @@ class PixelSocketResizeImageNode(comfy_api_io.ComfyNode):
     @classmethod
     def execute(cls, image: torch.Tensor, width: int, height: int, **kwargs) -> None:
         try:
-            img = PixelSocketUnits.tensor_to_image(image)
+            img = PixelSocketUtils.tensor_to_image(image)
             img = img.convert("RGBA")
 
             # アスペクト比を維持しながらwidth/height以内の最大サイズにリサイズ
@@ -70,4 +70,4 @@ class PixelSocketResizeImageNode(comfy_api_io.ComfyNode):
             import traceback
             traceback.print_exc()
 
-        return PixelSocketUnits.create_fallback_image(width, height)
+        return PixelSocketUtils.create_fallback_image(width, height)

@@ -7,7 +7,7 @@ from comfy_api.latest import io as comfy_api_io # pyright: ignore[reportMissingI
 import torch # pyright: ignore[reportMissingImports]
 import httpx
 
-from .pixel_socket_units import PixelSocketUnits
+from .pixel_socket_utils import PixelSocketUtils
 
 class PixelSocketLoadImageFromUrlNode(comfy_api_io.ComfyNode):
     @classmethod
@@ -47,7 +47,7 @@ class PixelSocketLoadImageFromUrlNode(comfy_api_io.ComfyNode):
             # Validate image data
             if not img_data or not cls._validate_image_data(img_data):
                 print(f"[PixelSocketLoadImageFromUrlNode] WARNING: Invalid image data. Returning blank 1024x1024 image.")
-                return PixelSocketUnits.create_fallback_image()
+                return PixelSocketUtils.create_fallback_image()
 
             img = Image.open(io.BytesIO(img_data)).convert("RGBA")
 
@@ -61,7 +61,7 @@ class PixelSocketLoadImageFromUrlNode(comfy_api_io.ComfyNode):
             import traceback
             traceback.print_exc()
 
-        return PixelSocketUnits.create_fallback_image()
+        return PixelSocketUtils.create_fallback_image()
 
     @classmethod
     def _validate_image_data(cls, img_data: bytes) -> bool:
