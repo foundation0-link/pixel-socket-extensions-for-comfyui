@@ -1,0 +1,15 @@
+# pyproject.toml
+[project]
+name = "pixel-socket-extensions-for-comfyui"
+description = "Pixel Socket Extensions for ComfyUI"
+version = "0.0.0"
+license = { file = "LICENSE.txt" }
+dependencies  = []
+
+[project.urls]
+Repository = "https://github.com/foundation0-link/pixel-socket-extensions-for-comfyui"
+
+[tool.comfy]
+PublisherId = "m10i"
+DisplayName = "m10i"
+Icon = "https://raw.githubusercontent.com/foundation0-link/pixel-socket-extensions-for-comfyui/refs/heads/main/assets/image.png"
