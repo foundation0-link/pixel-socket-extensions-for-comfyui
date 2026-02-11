@@ -3,7 +3,7 @@
 name = "pixel-socket-extensions-for-comfyui"
 description = "Pixel Socket Extensions for ComfyUI"
 version = "0.1.0"
-license = { file = "LICENSE.txt" }
+license = { file = "LICENSE" }
 dependencies  = []
 
 [project.urls]
