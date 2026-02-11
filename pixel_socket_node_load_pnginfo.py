@@ -141,7 +141,7 @@ class PixelSocketLoadImageInfoNode(comfy_api_io.ComfyNode):
             if exif_comment:
                 geninfo = exif_comment
             # geninfo をパース
-            (positive_prompt, negative_prompt, metadata_text) = parse_geninfo(geninfo or "")
+            (positive_prompt, negative_prompt, metadata_text) = parse_geninfo(geninfo)
 
         elif "comment" in items: # for gif
             geninfo: str = ""
@@ -150,7 +150,13 @@ class PixelSocketLoadImageInfoNode(comfy_api_io.ComfyNode):
             else:
                 geninfo = items["comment"]
             # geninfo をパース
-            (positive_prompt, negative_prompt, metadata_text) = parse_geninfo(geninfo or "")
+            (positive_prompt, negative_prompt, metadata_text) = parse_geninfo(geninfo)
+
+        else:
+            geninfo = items.pop("parameters", "")
+            if geninfo != "":
+                # geninfo をパース
+                (positive_prompt, negative_prompt, metadata_text) = parse_geninfo(geninfo)
 
 
         # デバッグ/確認用に出力
