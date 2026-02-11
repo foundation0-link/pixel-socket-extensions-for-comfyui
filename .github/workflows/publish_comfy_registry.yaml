@@ -1,8 +1,11 @@
 name: Publish to Comfy registry
 on:
+  workflow_dispatch:
   push:
-    tags:
-      - 'v*.*.*' # vA.B.C 形式のタグが push されたとき
+    branches:
+      - main
+    paths:
+      - "pyproject.toml"
 
 jobs:
   publish-comfy-registry:
@@ -11,24 +14,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Extract version from tag
-        id: version
-        shell: bash
-        run: |
-          # 例: refs/tags/v1.2.3 -> v1.2.3
-          RAW_TAG="${GITHUB_REF_NAME}"
-          echo "RAW_TAG=${RAW_TAG}"
-          # 先頭の v を削る (v1.2.3 -> 1.2.3)
-          VERSION="${RAW_TAG#v}"
-          echo "VERSION=${VERSION}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Update pyproject.toml version
-        shell: bash
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          sed -i 's/^version = "0.0.0"/version = "'"$VERSION"'"/' pyproject.toml
 
       - name: Publish Custom Node
         uses: Comfy-Org/publish-node-action@main
