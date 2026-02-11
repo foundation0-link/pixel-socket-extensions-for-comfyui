@@ -28,20 +28,7 @@ class PixelSocketUtils:
 
     @classmethod
     def tensor_to_image_bytes(cls, image: torch.Tensor, file_format: str, oxipng_level: int) -> bytes:
-        arr = image.detach().cpu().numpy()
-
-        # 余分な次元を削除
-        while arr.ndim > 3:
-            arr = arr[0]
-
-        arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
-
-        if arr.shape[-1] == 1:
-            arr = arr[:, :, 0]
-        elif arr.shape[-1] not in (3, 4):
-            raise ValueError(f"Unsupported channel count: {arr.shape}")
-
-        img = Image.fromarray(arr)
+        img = PixelSocketUtils.tensor_to_image(image)
 
         buf = io.BytesIO()
         if file_format.lower() == "png":
