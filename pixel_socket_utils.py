@@ -1,4 +1,3 @@
-from typing import Any
 import io
 import numpy as np
 import oxipng
